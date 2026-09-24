@@ -101,6 +101,44 @@ func TestExpandCTNonFatal(t *testing.T) {
 	}
 }
 
+func TestQueryCTRetriesOn429(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts < 3 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[{"name_value":"a.example.com"}]`))
+	}))
+	defer srv.Close()
+
+	names, err := queryCT("example.com", srv.URL, nil)
+	if err != nil {
+		t.Fatalf("queryCT error after retries: %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("expected 3 attempts (2x429 + success), got %d", attempts)
+	}
+	if len(names) != 1 || names[0] != "a.example.com" {
+		t.Fatalf("unexpected names: %v", names)
+	}
+}
+
+func TestQueryCTExhaustsOnPersistent429(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	if _, err := queryCT("example.com", srv.URL, nil); err == nil {
+		t.Fatal("expected error after exhausting 429 retries")
+	}
+}
+
 func TestParseCT(t *testing.T) {
 	body := strings.NewReader(`[{"name_value":"api.example.com\n*.wild.example.com"},{"name_value":"  *.cloud.example.com  "}]`)
 	names, err := parseCT(body)

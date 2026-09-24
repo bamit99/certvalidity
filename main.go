@@ -38,14 +38,17 @@ Usage:
   certvalidity [flags]
 
 Target sources (at least one required):
-  -target host[:port]      endpoint to probe (repeatable)
-  -targets-file path       file of host[:port] lines (blank/# ignored)
-  -domain name             bare domain; apex + www (+ CT subdomains with -ct)
+  -target host[:port]      endpoint to probe, or a bare domain to expand (repeatable)
+  -targets-file path       file of host:port lines (blank/# ignored)
+  -domain name             bare domain; expands to apex + www + CT subdomains
   -sweep cidr              CIDR to sweep for TLS on -sweep-port
 
-Scan flags:
-  -ct                      enable Certificate Transparency (crt.sh) discovery
-  -web-ports string        ports probed for -domain hosts (default "443")
+Discovery flags:
+  Bare-domain targets include subdomains from public Certificate Transparency
+  logs by default. Use -no-ct to probe only the apex and www.
+  -no-ct                   disable CT subdomain discovery
+  -ct                      enable CT discovery (legacy; on by default)
+  -web-ports string        ports probed for bare-domain hosts (default "443")
   -sweep-port int          port probed by -sweep (default 443)
   -workers int             probe concurrency (default 20)
   -timeout duration        per-endpoint timeout (default 5s)
@@ -74,15 +77,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	var targets, domains strList
 	var targetsFile, sweep, webPorts, apiKey, caAccount string
-	var useCT, jsonOut, useDigicert bool
+	var useCT, jsonOut, useDigicert, noCT bool
 	var sweepPort, workers, minDays int
 	var timeout time.Duration
 
-	fs.Var(&targets, "target", "endpoint host:port to probe (repeatable)")
+	fs.Var(&targets, "target", "endpoint host:port to probe, or a bare domain to expand (repeatable)")
 	fs.Var(&domains, "domain", "bare domain to expand into web endpoints (repeatable)")
 	fs.StringVar(&targetsFile, "targets-file", "", "file of host:port lines")
 	fs.StringVar(&sweep, "sweep", "", "CIDR to sweep")
-	fs.BoolVar(&useCT, "ct", false, "enable Certificate Transparency subdomain discovery")
+	fs.BoolVar(&noCT, "no-ct", false, "disable Certificate Transparency subdomain discovery (enabled by default for bare domains)")
+	fs.BoolVar(&useCT, "ct", false, "enable Certificate Transparency subdomain discovery (legacy; on by default)")
 	fs.StringVar(&webPorts, "web-ports", "443", "comma-separated ports for -domain hosts")
 	fs.IntVar(&sweepPort, "sweep-port", 443, "port probed by -sweep")
 	fs.IntVar(&workers, "workers", 20, "probe concurrency")
@@ -107,6 +111,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 	}
+
+	useCT = useCT || !noCT
 
 	ports, err := parsePorts(webPorts)
 	if err != nil {

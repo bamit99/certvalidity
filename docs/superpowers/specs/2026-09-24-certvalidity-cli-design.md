@@ -67,10 +67,11 @@ Single static binary from `go build`. Zero runtime dependencies beyond Go stdlib
 
 ## Domain discovery (internal/discover)
 
-`-domain example.com` expands a bare domain into web endpoints to probe:
+`-domain example.com` (or a bare `-target example.com` with no port) expands a
+bare domain into web endpoints to probe:
 
 1. **Implicit hosts:** the apex (`example.com`) and `www.example.com`, on the web port(s).
-2. **Certificate Transparency (opt-in with `-ct`):** query crt.sh's public JSON API (`https://crt.sh/?q=%25.example.com&output=json`) for subdomains (`*.example.com` names), normalize to hostnames (strip wildcards/whitespace), dedupe with the implicit hosts. Only probe CT names that resolve via DNS.
+2. **Certificate Transparency (on by default; disable with `-no-ct`):** query crt.sh's public JSON API (`https://crt.sh/?q=%25.example.com&output=json`) for subdomains (`*.example.com` names), normalize to hostnames (strip wildcards/whitespace), dedupe with the implicit hosts. Only probe CT names that resolve via DNS.
 3. Each discovered hostname is probed on `-web-ports` (default `443`, may include `80`, `8443`), deduped and merged into the same target pipeline as `-target` entries.
 
 Requires network access to crt.sh; failures there are non-fatal (implicit hosts still probed, a note emitted). No `host[:port]` formats allowed in `-domain` input — validation rejects them.
@@ -94,10 +95,10 @@ Lifetime caps, keyed by the certificate's `notBefore` date (effective cap in for
 
 ```
 certvalidity [flags]
-  -target host[:port]        endpoint to probe (repeatable)
+  -target host[:port]        endpoint to probe, or bare domain to expand (repeatable)
   -targets-file path         file of host[:port] lines (comments/blank ignored)
-  -domain name               bare domain; expands to apex + www + (if -ct) CT subdomains (repeatable)
-  -ct                        enable Certificate Transparency (crt.sh) subdomain discovery for -domain
+  -domain name               bare domain; apex + www + CT subdomains (default on; repeatable)
+  -ct / -no-ct               force CT discovery on / off (on by default for bare domains)
   -web-ports string          ports probed for -domain hosts (default "443", comma-separated)
   -sweep cidr                optional CIDR to sweep for TLS on -sweep-port
   -sweep-port int             default 443

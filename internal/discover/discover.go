@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -95,17 +96,33 @@ func queryCT(domain, base string, client *http.Client) ([]string, error) {
 	u := base + "/?q=" + url.QueryEscape("%."+domain) + "&output=json"
 	c := client
 	if c == nil {
-		c = &http.Client{Timeout: 15 * time.Second}
+		c = &http.Client{Timeout: 30 * time.Second}
 	}
-	resp, err := c.Get(u)
-	if err != nil {
-		return nil, err
+	const maxAttempts = 4
+	for attempt := 1; ; attempt++ {
+		resp, err := c.Get(u)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode == http.StatusOK {
+			names, perr := parseCT(resp.Body)
+			resp.Body.Close()
+			return names, perr
+		}
+		ra := resp.Header.Get("Retry-After")
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusTooManyRequests || attempt >= maxAttempts {
+			return nil, fmt.Errorf("CT server status %s", resp.Status)
+		}
+		delay := time.Duration(1<<(attempt-1)) * 2 * time.Second
+		if secs, err := strconv.Atoi(ra); err == nil && secs > 0 {
+			delay = time.Duration(secs) * time.Second
+		}
+		if delay > 30*time.Second {
+			delay = 30 * time.Second
+		}
+		time.Sleep(delay)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("CT server status %s", resp.Status)
-	}
-	return parseCT(resp.Body)
 }
 
 func parseCT(r io.Reader) ([]string, error) {

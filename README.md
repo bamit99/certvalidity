@@ -60,19 +60,25 @@ One or more target sources is required:
 
 | Source | Meaning |
 |---|---|
-| `-target host[:port]` | probe a specific endpoint (repeatable) |
+| `-target host[:port]` | probe a specific endpoint, or give a bare domain to expand (repeatable) |
 | `-targets-file path` | file of `host:port` lines (`#` comments and blanks ignored) |
-| `-domain name` | bare domain → probes `name` and `www.name`; with `-ct`, also probes subdomains found in public Certificate Transparency logs |
+| `-domain name` | bare domain → probes `name`, `www.name`, **and subdomains found in public Certificate Transparency logs** |
 | `-sweep cidr` | discover hosts serving TLS in a CIDR (`-sweep-port`) |
+
+**Bare-domain targets (via `-target` or `-domain`) include CT-listed
+subdomains by default.** Use `-no-ct` to probe only the apex and `www`.
 
 Examples:
 
 ```sh
-# probe a couple of endpoints
-certvalidity -target www.example.com:443 -target api.example.com:443
+# probe a specific endpoint
+certvalidity -target www.example.com:443
 
-# scan a domain and its CT-listed subdomains
-certvalidity -domain example.com -ct -web-ports 443,8443
+# scan a domain and all its CT-listed subdomains (default)
+certvalidity -domain example.com
+
+# ...or just the apex + www
+certvalidity -domain example.com -no-ct
 
 # sweep an internal range for anything serving 443
 certvalidity -sweep 10.10.0.0/24 -workers 50
@@ -88,11 +94,12 @@ certvalidity -target www.example.com:443 -json
 
 | Flag | Default | Description |
 |---|---|---|
-| `-target` | | endpoint `host:port` to probe (repeatable) |
+| `-target` | | endpoint `host:port` or bare domain to expand (repeatable) |
 | `-targets-file` | | file of `host:port` lines |
 | `-domain` | | bare domain to expand (repeatable) |
-| `-ct` | `false` | enable Certificate Transparency (crt.sh) subdomain discovery |
-| `-web-ports` | `443` | comma-separated ports probed for `-domain` hosts |
+| `-ct` | `true` (effective) | enable Certificate Transparency subdomain discovery (legacy flag; on by default) |
+| `-no-ct` | `false` | disable CT subdomain discovery (probe apex + www only) |
+| `-web-ports` | `443` | comma-separated ports probed for bare-domain hosts |
 | `-sweep` | | CIDR to sweep |
 | `-sweep-port` | `443` | port probed by `-sweep` |
 | `-workers` | `20` | probe concurrency |
@@ -116,9 +123,11 @@ URL (default `https://www.digicert.com`) — handy for gateways and tests.
 
 ### Notes
 
-- Certificate Transparency discovery **only** surfaces subdomains whose certs
-  are in public CT logs. Subdomains served exclusively by internal/private-PKI
-  certs won't appear — cover those with `-sweep` or `-targets-file`.
+- Certificate Transparency discovery is **on by default for bare-domain
+  targets** but only surfaces subdomains whose certs are in public CT logs.
+  Subdomains served exclusively by internal/private-PKI certs won't appear —
+  cover those with `-sweep` or `-targets-file`, or disable CT with `-no-ct`
+  when you only want the apex and `www`.
 - Probing uses `InsecureSkipVerify` **only to retrieve** the presented chain
   for inspection; presented chains are never trusted.
 

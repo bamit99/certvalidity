@@ -29,9 +29,10 @@ complete. Keep `gofmt -l .` output empty.
   testable: returns an int, writes to stdout/stderr args).
 - `internal/scanner` — target resolution, TLS probing (`InsecureSkipVerify`
   only to retrieve chains, never to trust them), worker pool, CIDR sweep.
-- `internal/discover` — `-domain` expansion: apex + www, optional crt.sh
-  Certificate Transparency subdomains, DNS filtering. `Options` struct enables
-  injection of resolver / CT base URL.
+- `internal/discover` — bare-domain expansion: apex + www + subdomains from
+  public Certificate Transparency logs (crt.sh). CT is **on by default** for
+  bare-domain targets (`-no-ct` disables); `Options` struct enables injection
+  of resolver / CT base URL; failures are non-fatal (implicit hosts still probed).
   **Caveat:** CT only sees publicly-logged certs; private-PKI subdomains are
   covered by `-sweep` / `-targets-file`.
 - `internal/certinfo` — classification and status. Status precedence is
